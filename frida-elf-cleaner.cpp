@@ -21,14 +21,14 @@ template<typename ElfHeaderType /*Elf{32,64}_Ehdr*/,
 bool process_elf(uint8_t* bytes, size_t elf_file_size, char const* file_name)
 {
 	if (sizeof(ElfSectionHeaderType) > elf_file_size) {
-		fprintf(stderr, "termux-elf-cleaner: Elf header for '%s' would end at %zu but file size only %zu\n", file_name, sizeof(ElfSectionHeaderType), elf_file_size);
+		fprintf(stderr, "frida-elf-cleaner: Elf header for '%s' would end at %zu but file size only %zu\n", file_name, sizeof(ElfSectionHeaderType), elf_file_size);
 		return false;
 	}
 	ElfHeaderType* elf_hdr = reinterpret_cast<ElfHeaderType*>(bytes);
 
 	size_t last_section_header_byte = elf_hdr->e_shoff + sizeof(ElfSectionHeaderType) * elf_hdr->e_shnum;
 	if (last_section_header_byte > elf_file_size) {
-		fprintf(stderr, "termux-elf-cleaner: Section header for '%s' would end at %zu but file size only %zu\n", file_name, last_section_header_byte, elf_file_size);
+		fprintf(stderr, "frida-elf-cleaner: Section header for '%s' would end at %zu but file size only %zu\n", file_name, last_section_header_byte, elf_file_size);
 		return false;
 	}
 	ElfSectionHeaderType* section_header_table = reinterpret_cast<ElfSectionHeaderType*>(bytes + elf_hdr->e_shoff);
@@ -38,7 +38,7 @@ bool process_elf(uint8_t* bytes, size_t elf_file_size, char const* file_name)
 		if (section_header_entry->sh_type == SHT_DYNAMIC) {
 			size_t const last_dynamic_section_byte = section_header_entry->sh_offset + section_header_entry->sh_size;
 			if (last_dynamic_section_byte > elf_file_size) {
-				fprintf(stderr, "termux-elf-cleaner: Dynamic section for '%s' would end at %zu but file size only %zu\n", file_name, last_dynamic_section_byte, elf_file_size);
+				fprintf(stderr, "frida-elf-cleaner: Dynamic section for '%s' would end at %zu but file size only %zu\n", file_name, last_dynamic_section_byte, elf_file_size);
 				return false;
 			}
 
@@ -68,7 +68,7 @@ bool process_elf(uint8_t* bytes, size_t elf_file_size, char const* file_name)
 					case DT_RUNPATH: removed_name = "DT_RUNPATH"; break;
 				}
 				if (removed_name != nullptr) {
-					printf("termux-elf-cleaner: Removing the %s dynamic section entry from '%s'\n", removed_name, file_name);
+					printf("frida-elf-cleaner: Removing the %s dynamic section entry from '%s'\n", removed_name, file_name);
 					// Tag the entry with DT_NULL and put it last:
 					dynamic_section_entry->d_tag = DT_NULL;
 					// Decrease j to process new entry index:
@@ -78,7 +78,7 @@ bool process_elf(uint8_t* bytes, size_t elf_file_size, char const* file_name)
 		} else if (section_header_entry->sh_type == SHT_GNU_verdef ||
 			   section_header_entry->sh_type == SHT_GNU_verneed ||
 			   section_header_entry->sh_type == SHT_GNU_versym) {
-			printf("termux-elf-cleaner: Removing version section from '%s'\n", file_name);
+			printf("frida-elf-cleaner: Removing version section from '%s'\n", file_name);
 			section_header_entry->sh_type = SHT_NULL;
 		}
 	}
@@ -125,7 +125,7 @@ int main(int argc, char const** argv)
 		}
 
 		if (bytes[/*EI_DATA*/5] != 1) {
-			fprintf(stderr, "termux-elf-cleaner: Not little endianness in '%s'\n", file_name);
+			fprintf(stderr, "frida-elf-cleaner: Not little endianness in '%s'\n", file_name);
 			munmap(mem, st.st_size);
 			close(fd);
 			continue;
@@ -137,7 +137,7 @@ int main(int argc, char const** argv)
 		} else if (bit_value == 2) {
 			if (!process_elf<Elf64_Ehdr, Elf64_Shdr, Elf64_Dyn>(bytes, st.st_size, file_name)) return 1;
 		} else {
-			printf("termux-elf-cleaner: Incorrect bit value %d in '%s'\n", bit_value, file_name);
+			printf("frida-elf-cleaner: Incorrect bit value %d in '%s'\n", bit_value, file_name);
 			return 1;
 		}
 
