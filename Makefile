@@ -1,16 +1,16 @@
 CXXFLAGS += -std=c++11 -Wall -Wextra -pedantic
 PREFIX ?= /usr/local
 
-termux-elf-cleaner: termux-elf-cleaner.cpp
+frida-elf-cleaner: frida-elf-cleaner.cpp
 
 clean:
-	rm -f termux-elf-cleaner
+	rm -f frida-elf-cleaner
 
-install: termux-elf-cleaner
+install: frida-elf-cleaner
 	mkdir -p $(DESTDIR)$(PREFIX)/bin
-	install termux-elf-cleaner $(DESTDIR)$(PREFIX)/bin/termux-elf-cleaner
+	install frida-elf-cleaner $(DESTDIR)$(PREFIX)/bin/frida-elf-cleaner
 
 uninstall:
-	rm -f $(PREFIX)/bin/termux-elf-cleaner
+	rm -f $(PREFIX)/bin/frida-elf-cleaner
 
 .PHONY: clean install uninstall
