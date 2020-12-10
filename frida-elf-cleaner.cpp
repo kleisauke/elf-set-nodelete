@@ -9,7 +9,7 @@
 #include <unistd.h>
 
 #ifndef __ANDROID_API__
-#define __ANDROID_API__ 21
+#define __ANDROID_API__ 18
 #endif
 
 // Include a local elf.h copy as not all platforms have it.
