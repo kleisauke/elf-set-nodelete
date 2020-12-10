@@ -8,12 +8,29 @@
 #include <sys/types.h>
 #include <unistd.h>
 
+#ifndef __ANDROID_API__
+#define __ANDROID_API__ 21
+#endif
+
 // Include a local elf.h copy as not all platforms have it.
 #include "elf.h"
 
+#define DT_GNU_HASH 0x6ffffef5
 #define DT_VERSYM 0x6ffffff0
+#define DT_FLAGS_1 0x6ffffffb
 #define DT_VERNEEDED 0x6ffffffe
 #define DT_VERNEEDNUM 0x6fffffff
+
+#define DF_1_NOW	0x00000001	/* Set RTLD_NOW for this object.  */
+#define DF_1_GLOBAL	0x00000002	/* Set RTLD_GLOBAL for this object.  */
+#define DF_1_NODELETE	0x00000008	/* Set RTLD_NODELETE for this object.*/
+
+#if __ANDROID_API__ < 23
+#define SUPPORTED_DT_FLAGS_1 (DF_1_NOW | DF_1_GLOBAL)
+#else
+// The supported DT_FLAGS_1 values as of Android 6.0.
+#define SUPPORTED_DT_FLAGS_1 (DF_1_NOW | DF_1_GLOBAL | DF_1_NODELETE)
+#endif
 
 template<typename ElfHeaderType /*Elf{32,64}_Ehdr*/,
 	 typename ElfSectionHeaderType /*Elf{32,64}_Shdr*/,
@@ -21,14 +38,14 @@ template<typename ElfHeaderType /*Elf{32,64}_Ehdr*/,
 bool process_elf(uint8_t* bytes, size_t elf_file_size, char const* file_name)
 {
 	if (sizeof(ElfSectionHeaderType) > elf_file_size) {
-		fprintf(stderr, "frida-elf-cleaner: Elf header for '%s' would end at %zu but file size only %zu\n", file_name, sizeof(ElfSectionHeaderType), elf_file_size);
+		fprintf(stderr, "termux-elf-cleaner: Elf header for '%s' would end at %zu but file size only %zu\n", file_name, sizeof(ElfSectionHeaderType), elf_file_size);
 		return false;
 	}
 	ElfHeaderType* elf_hdr = reinterpret_cast<ElfHeaderType*>(bytes);
 
 	size_t last_section_header_byte = elf_hdr->e_shoff + sizeof(ElfSectionHeaderType) * elf_hdr->e_shnum;
 	if (last_section_header_byte > elf_file_size) {
-		fprintf(stderr, "frida-elf-cleaner: Section header for '%s' would end at %zu but file size only %zu\n", file_name, last_section_header_byte, elf_file_size);
+		fprintf(stderr, "termux-elf-cleaner: Section header for '%s' would end at %zu but file size only %zu\n", file_name, last_section_header_byte, elf_file_size);
 		return false;
 	}
 	ElfSectionHeaderType* section_header_table = reinterpret_cast<ElfSectionHeaderType*>(bytes + elf_hdr->e_shoff);
@@ -38,7 +55,7 @@ bool process_elf(uint8_t* bytes, size_t elf_file_size, char const* file_name)
 		if (section_header_entry->sh_type == SHT_DYNAMIC) {
 			size_t const last_dynamic_section_byte = section_header_entry->sh_offset + section_header_entry->sh_size;
 			if (last_dynamic_section_byte > elf_file_size) {
-				fprintf(stderr, "frida-elf-cleaner: Dynamic section for '%s' would end at %zu but file size only %zu\n", file_name, last_dynamic_section_byte, elf_file_size);
+				fprintf(stderr, "termux-elf-cleaner: Dynamic section for '%s' would end at %zu but file size only %zu\n", file_name, last_dynamic_section_byte, elf_file_size);
 				return false;
 			}
 
@@ -59,26 +76,51 @@ bool process_elf(uint8_t* bytes, size_t elf_file_size, char const* file_name)
 				ElfDynamicSectionEntryType* dynamic_section_entry = dynamic_section + j;
 				char const* removed_name = nullptr;
 				switch (dynamic_section_entry->d_tag) {
+#if __ANDROID_API__ <= 21
+					case DT_GNU_HASH: removed_name = "DT_GNU_HASH"; break;
+#endif
+#if __ANDROID_API__ < 23
 					case DT_VERSYM: removed_name = "DT_VERSYM"; break;
 					case DT_VERNEEDED: removed_name = "DT_VERNEEDED"; break;
 					case DT_VERNEEDNUM: removed_name = "DT_VERNEEDNUM"; break;
 					case DT_VERDEF: removed_name = "DT_VERDEF"; break;
 					case DT_VERDEFNUM: removed_name = "DT_VERDEFNUM"; break;
+#endif
 					case DT_RPATH: removed_name = "DT_RPATH"; break;
+#if __ANDROID_API__ < 24
 					case DT_RUNPATH: removed_name = "DT_RUNPATH"; break;
+#endif
 				}
 				if (removed_name != nullptr) {
+					printf("termux-elf-cleaner: Removing the %s dynamic section entry from '%s'\n", removed_name, file_name);
 					// Tag the entry with DT_NULL and put it last:
 					dynamic_section_entry->d_tag = DT_NULL;
 					// Decrease j to process new entry index:
 					std::swap(dynamic_section[j--], dynamic_section[last_nonnull_entry_idx--]);
+				} else if (dynamic_section_entry->d_tag == DT_FLAGS_1) {
+					// Remove unsupported DF_1_* flags to avoid linker warnings.
+					decltype(dynamic_section_entry->d_un.d_val) orig_d_val =
+						dynamic_section_entry->d_un.d_val;
+					decltype(dynamic_section_entry->d_un.d_val) new_d_val =
+						(orig_d_val & SUPPORTED_DT_FLAGS_1);
+					if (new_d_val != orig_d_val) {
+						printf("termux-elf-cleaner: Replacing unsupported DF_1_* flags %llu with %llu in '%s'\n",
+						       (unsigned long long) orig_d_val,
+						       (unsigned long long) new_d_val,
+						       file_name);
+						dynamic_section_entry->d_un.d_val = new_d_val;
+					}
 				}
 			}
-		} else if (section_header_entry->sh_type == SHT_GNU_verdef ||
+		}
+#if __ANDROID_API__ < 23
+		else if (section_header_entry->sh_type == SHT_GNU_verdef ||
 			   section_header_entry->sh_type == SHT_GNU_verneed ||
 			   section_header_entry->sh_type == SHT_GNU_versym) {
+			printf("termux-elf-cleaner: Removing version section from '%s'\n", file_name);
 			section_header_entry->sh_type = SHT_NULL;
 		}
+#endif
 	}
 	return true;
 }
@@ -88,8 +130,9 @@ int main(int argc, char const** argv)
 {
 	if (argc < 2 || (argc == 2 && strcmp(argv[1], "-h")==0)) {
 		fprintf(stderr, "usage: %s <filenames>\n", argv[0]);
-		fprintf(stderr, "\nProcesses ELF files to remove unsupported section types \n"
-				"and dynamic section entries which the Android linker warns about.\n");
+		fprintf(stderr, "\nProcesses ELF files to remove unsupported section types\n"
+				"and dynamic section entries which the Android linker (API %d)\nwarns about.\n",
+				__ANDROID_API__);
 		return 1;
 	}
 
@@ -123,7 +166,7 @@ int main(int argc, char const** argv)
 		}
 
 		if (bytes[/*EI_DATA*/5] != 1) {
-			fprintf(stderr, "frida-elf-cleaner: Not little endianness in '%s'\n", file_name);
+			fprintf(stderr, "termux-elf-cleaner: Not little endianness in '%s'\n", file_name);
 			munmap(mem, st.st_size);
 			close(fd);
 			continue;
@@ -135,7 +178,7 @@ int main(int argc, char const** argv)
 		} else if (bit_value == 2) {
 			if (!process_elf<Elf64_Ehdr, Elf64_Shdr, Elf64_Dyn>(bytes, st.st_size, file_name)) return 1;
 		} else {
-			fprintf(stderr, "frida-elf-cleaner: Incorrect bit value %d in '%s'\n", bit_value, file_name);
+			printf("termux-elf-cleaner: Incorrect bit value %d in '%s'\n", bit_value, file_name);
 			return 1;
 		}
 
@@ -146,4 +189,3 @@ int main(int argc, char const** argv)
 	}
 	return 0;
 }
-
