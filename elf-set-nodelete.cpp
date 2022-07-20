@@ -11,14 +11,14 @@
 
 #define ARRAYELTS(arr) (sizeof (arr) / sizeof (arr)[0])
 
-#define DT_FLAGS_1	0x6ffffffb
-#define DF_1_NODELETE	0x00000008	/* Set RTLD_NODELETE for this object. */
+#define DT_FLAGS_1    0x6ffffffb
+#define DF_1_NODELETE 0x00000008 /* Set RTLD_NODELETE for this object. */
 
 bool dry_run = false;
 bool quiet = false;
 
 static char const *const usage_message[] =
-		{ "\
+		{"\
 \n\
 Processes ELF files to set RTLD_NODELETE.\n\
 \n\
@@ -34,7 +34,7 @@ template<typename ElfWord /*Elf{32_Word,64_Xword}*/,
 		typename ElfSectionHeaderType /*Elf{32,64}_Shdr*/,
 		typename ElfProgramHeaderType /*Elf{32,64}_Phdr*/,
 		typename ElfDynamicSectionEntryType /* Elf{32,64}_Dyn */>
-bool process_elf(uint8_t* bytes, size_t elf_file_size, char const* file_name)
+bool process_elf(uint8_t *bytes, size_t elf_file_size, char const *file_name)
 {
 	if (sizeof(ElfSectionHeaderType) > elf_file_size) {
 		fprintf(stderr, "elf-set-nodelete: Elf header for '%s' would end at %zu but file size only %zu\n",
@@ -42,7 +42,7 @@ bool process_elf(uint8_t* bytes, size_t elf_file_size, char const* file_name)
 		return false;
 	}
 
-	ElfHeaderType* elf_hdr = reinterpret_cast<ElfHeaderType*>(bytes);
+	ElfHeaderType *elf_hdr = reinterpret_cast<ElfHeaderType *>(bytes);
 
 	size_t last_section_header_byte = elf_hdr->e_shoff + sizeof(ElfSectionHeaderType) * elf_hdr->e_shnum;
 	if (last_section_header_byte > elf_file_size) {
@@ -51,11 +51,11 @@ bool process_elf(uint8_t* bytes, size_t elf_file_size, char const* file_name)
 		return false;
 	}
 
-	ElfSectionHeaderType* section_header_table = reinterpret_cast<ElfSectionHeaderType*>(bytes + elf_hdr->e_shoff);
+	ElfSectionHeaderType *section_header_table = reinterpret_cast<ElfSectionHeaderType *>(bytes + elf_hdr->e_shoff);
 
 	/* Iterate over section headers */
 	for (unsigned int i = 1; i < elf_hdr->e_shnum; i++) {
-		ElfSectionHeaderType* section_header_entry = section_header_table + i;
+		ElfSectionHeaderType *section_header_entry = section_header_table + i;
 		if (section_header_entry->sh_type == SHT_DYNAMIC) {
 			size_t const last_dynamic_section_byte = section_header_entry->sh_offset + section_header_entry->sh_size;
 			if (last_dynamic_section_byte > elf_file_size) {
@@ -65,18 +65,18 @@ bool process_elf(uint8_t* bytes, size_t elf_file_size, char const* file_name)
 			}
 
 			size_t const dynamic_section_entries = section_header_entry->sh_size / sizeof(ElfDynamicSectionEntryType);
-			ElfDynamicSectionEntryType* const dynamic_section =
-					reinterpret_cast<ElfDynamicSectionEntryType*>(bytes + section_header_entry->sh_offset);
+			ElfDynamicSectionEntryType *const dynamic_section =
+					reinterpret_cast<ElfDynamicSectionEntryType *>(bytes + section_header_entry->sh_offset);
 
 			for (unsigned int j = 0; j < dynamic_section_entries; j++) {
-				ElfDynamicSectionEntryType* dynamic_section_entry = dynamic_section + j;
+				ElfDynamicSectionEntryType *dynamic_section_entry = dynamic_section + j;
 
 				if (dynamic_section_entry->d_tag == DT_FLAGS_1) {
 					// Set RTLD_NODELETE to prevent unload.
 					decltype(dynamic_section_entry->d_un.d_val) orig_d_val =
-																		dynamic_section_entry->d_un.d_val;
+						dynamic_section_entry->d_un.d_val;
 					decltype(dynamic_section_entry->d_un.d_val) new_d_val =
-																		(orig_d_val | DF_1_NODELETE);
+						(orig_d_val | DF_1_NODELETE);
 					if (new_d_val != orig_d_val) {
 						if (!quiet)
 							printf("elf-set-nodelete: Replacing DF_1_* flags %llu with %llu in '%s'\n",
@@ -95,7 +95,7 @@ bool process_elf(uint8_t* bytes, size_t elf_file_size, char const* file_name)
 }
 
 
-int main(int argc, char const** argv)
+int main(int argc, char const **argv)
 {
 	if (argc == 1 || (argc == 2 && strcmp(argv[1], "--help") == 0)) {
 		printf("Usage: %s [OPTIONS] [FILENAME]...\n", argv[0]);
@@ -115,28 +115,34 @@ int main(int argc, char const** argv)
 			continue;
 		}
 
-		char const* file_name = argv[i];
+		char const *file_name = argv[i];
 		int fd = open(file_name, O_RDWR);
 		if (fd < 0) {
-			char* error_message;
+			char *error_message;
 			if (asprintf(&error_message, "open(\"%s\")", file_name) == -1)
-				error_message = (char*) "open()";
+				error_message = (char *) "open()";
 			perror(error_message);
 			return 1;
 		}
 
 		struct stat st;
-		if (fstat(fd, &st) < 0) { perror("fstat()"); return 1; }
+		if (fstat(fd, &st) < 0) {
+			perror("fstat()");
+			return 1;
+		}
 
 		if (st.st_size < (long long) sizeof(Elf32_Ehdr)) {
 			close(fd);
 			continue;
 		}
 
-		void* mem = mmap(0, st.st_size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
-		if (mem == MAP_FAILED) { perror("mmap()"); return 1; }
+		void *mem = mmap(0, st.st_size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+		if (mem == MAP_FAILED) {
+			perror("mmap()");
+			return 1;
+		}
 
-		uint8_t* bytes = reinterpret_cast<uint8_t*>(mem);
+		uint8_t *bytes = reinterpret_cast<uint8_t *>(mem);
 		if (!(bytes[0] == 0x7F && bytes[1] == 'E' && bytes[2] == 'L' && bytes[3] == 'F')) {
 			// Not the ELF magic number.
 			munmap(mem, st.st_size);
