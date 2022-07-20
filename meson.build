@@ -1,2 +1,2 @@
-project('frida-elf-cleaner', 'cpp', version : '1.10-frida')
-executable('frida-elf-cleaner', 'frida-elf-cleaner.cpp', install : true)
+project('elf-set-nodelete', 'cpp', version: '1.10')
+executable('elf-set-nodelete', 'elf-set-nodelete.cpp', install: true)

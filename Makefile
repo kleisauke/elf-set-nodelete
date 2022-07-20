@@ -1,16 +1,16 @@
 CXXFLAGS += -std=c++11 -Wall -Wextra -pedantic
 PREFIX ?= /usr/local
 
-frida-elf-cleaner: frida-elf-cleaner.cpp
+elf-set-nodelete: elf-set-nodelete.cpp
 
 clean:
-	rm -f frida-elf-cleaner
+	rm -f elf-set-nodelete
 
-install: frida-elf-cleaner
+install: elf-set-nodelete
 	mkdir -p $(DESTDIR)$(PREFIX)/bin
-	install frida-elf-cleaner $(DESTDIR)$(PREFIX)/bin/frida-elf-cleaner
+	install elf-set-nodelete $(DESTDIR)$(PREFIX)/bin/elf-set-nodelete
 
 uninstall:
-	rm -f $(PREFIX)/bin/frida-elf-cleaner
+	rm -f $(PREFIX)/bin/elf-set-nodelete
 
 .PHONY: clean install uninstall
